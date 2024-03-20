@@ -8,8 +8,8 @@ output: pdf_document
 ```{r, include = TRUE, warning = FALSE, message = FALSE}
 library(tidyverse)
 library(modelr)
-ev_data <- read_csv("~/Desktop/CMU ETIM/19603 Data Science/Electric_Vehicle_Population_Data.csv")
-demo_data <- read.csv("~/Desktop/CMU ETIM/19603 Data Science/demo.csv")
+ev_data <- read_csv("Electric_Vehicle_Population_Data.csv")
+demo_data <- read.csv("demo.csv")
 ```
 # Dataset
 Electric Vehicle Population Data: This dataset shows the Battery Electric Vehicles (BEVs) and Plug-in Hybrid Electric Vehicles (PHEVs) that are currently registered through the Washington State Department of Licensing (DOL).
