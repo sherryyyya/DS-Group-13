@@ -1,0 +1,79 @@
+---
+title: "Final Group Project - Proposal"
+author: "Abdulaziz Aljuaid, Jialong Li, Jack Lyu, Yu Qin, Xun Yang"
+date: "2024-03-20"
+output: pdf_document
+---
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(modelr)
+ev_data <- read_csv("~/Desktop/CMU ETIM/19603 Data Science/Electric_Vehicle_Population_Data.csv")
+demo_data <- read.csv("~/Desktop/CMU ETIM/19603 Data Science/demo.csv")
+```
+# Dataset
+Electric Vehicle Population Data: This dataset shows the Battery Electric Vehicles (BEVs) and Plug-in Hybrid Electric Vehicles (PHEVs) that are currently registered through the Washington State Department of Licensing (DOL).
+Washington State of United States Census Bureau: household income in each county and education
+
+# Questions
+* We are trying to find the EV per capita in Washington State. Start from counties first, and then try to simulate through Census Tract.
+* How does EV per capita relate to the geographical information of different counties? 
+* Can we predict the adoption rate of EVs for counties, and find counties that are slower on the EV adoption but have the capability of adopting EVs so the companies can make more sales in those counties?
+
+# A Preliminary Model
+* Y variable is EV per capita by each county who is 18 years and over.
+
+* X variables are median household income in the county and the percentage of the population that obtained a bachelor's degree or higher that is older than 25.
+
+# ggplot
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+# number of ev per county in WA state
+wa_ev_data <- ev_data %>%
+  filter(State == "WA") %>%
+  group_by(County) %>%
+  summarise(Number_of_EV = n())
+print(wa_ev_data)
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+merged_data <- merge(wa_ev_data, demo_data, by = "County")
+merged_data <- merged_data %>%
+  mutate(EV_per_Capita = Number_of_EV / population)
+print(merged_data)
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+merged_data$percentage <- as.numeric(gsub("%", "", merged_data$percentage)) / 100
+model <- lm(EV_per_Capita ~ income + percentage, data = merged_data)
+summary(model)
+```
+```{r}
+library(ggplot2)
+
+ggplot(merged_data, aes(x = income, y = EV_per_Capita)) +
+  geom_point(aes(color = County), alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(x = "Median Household Income", y = "EV per Capita", title = "EV per Capita vs. Median Household Income") +
+  theme_minimal()
+```
+```{r}
+ggplot(merged_data, aes(x = percentage, y = EV_per_Capita)) +
+  geom_point(aes(color = County), alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Percentage of Population with Bachelor's Degree or Higher", y = "EV per Capita", title = "EV per Capita vs. Bachelor's Degree or Higher") +
+  theme_minimal()
+```
+
+# Future Analysis or Datasets
+We have explored the relationship between the per capita ownership of electric vehicles (EVs) in each county, median household income, and the percentage of the population over 25 with a bachelor's degree or higher. This provides valuable insights into the adoption of electric vehicles across different regions in Washington state. Here are some variables for future analyses or datasets:
+
+Comprehensive Demographic and Economic Factors
+
+1. Age Distribution
+
+* Age demographics can influence EV adoption rates, as different age groups may have varying preferences, financial capabilities, and environmental consciousness levels.
+
+2. Public Transportation Accessibility
+
+* The availability and quality of public transportation can influence personal vehicle ownership rates, including EVs, especially in urban areas.
