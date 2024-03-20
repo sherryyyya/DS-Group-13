@@ -70,10 +70,18 @@ We have explored the relationship between the per capita ownership of electric v
 
 Comprehensive Demographic and Economic Factors
 
-1. Age Distribution
+1. Geographical information update
 
-* Age demographics can influence EV adoption rates, as different age groups may have varying preferences, financial capabilities, and environmental consciousness levels.
+* The current goegraphical variable used is county, but with only 39 data entries, fitting model and get ideal outcome is extremely challenging, for future study, we consider to use census tract, a much smaller geographical block and we will have much more data entries in the state of washington and make it better for us to fit models.
 
-2. Public Transportation Accessibility
+2. Fitting with different models
 
-* The availability and quality of public transportation can influence personal vehicle ownership rates, including EVs, especially in urban areas.
+* The model used for this proposal is linear regression modeling and for our future research we consider to use different model applies to the dataset and try to fit the dataset better with other models ohter than simple linear regression
+
+3. Considering other variables
+
+* For our future studies, we want to consider other variables that might have impact on the adoption of EV associated with different geographical areas.
+
+4. Segmentation of data
+
+* We are also considering using segmented demographic information to see how different age group react to EV and the difference of the EV adaption rate with different age groups.
