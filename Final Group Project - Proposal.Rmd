@@ -13,7 +13,8 @@ demo_data <- read.csv("demo.csv")
 ```
 # Dataset
 Electric Vehicle Population Data: This dataset shows the Battery Electric Vehicles (BEVs) and Plug-in Hybrid Electric Vehicles (PHEVs) that are currently registered through the Washington State Department of Licensing (DOL).
-Washington State of United States Census Bureau: household income in each county and education
+Washington State of United States Census Bureau: household income in each county and education.
+We have extracted the data from the Census Bureau and filtered out the data with the variables that we are interested in to research on into the file 'demo.csv'.
 
 # Questions
 * We are trying to find the EV per capita in Washington State. Start from counties first, and then try to simulate through Census Tract.
