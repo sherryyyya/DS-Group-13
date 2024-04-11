@@ -1,0 +1,305 @@
+---
+title: "Final Group Project - Proposal"
+author: "Abdulaziz Aljuaid, Jialong Li, Jack Lyu, Yu Qin, Xun Yang"
+date: "2024-04-10"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(modelr)
+ev_data <- read_csv("Electric_Vehicle_Population_Data.csv")
+demo_data <- read.csv("demo.csv")
+population_by_postal_code <- read.csv("Pupulation by Postal Code.csv")
+income_by_postal_code <- read.csv("Income by Postal Code.csv")
+charge_station <- read.csv("Charge Station.csv")
+education <- read.csv("education by postal code.csv")
+```
+# Dataset
+Electric Vehicle Population Data: This dataset shows the Battery Electric Vehicles (BEVs) and Plug-in Hybrid Electric Vehicles (PHEVs) that are currently registered through the Washington State Department of Licensing (DOL). 
+
+Washington State of United States Census Bureau: household income in each county and education.
+
+Electric Vehicle Charging Station Locations: Charging station information in Washington State.
+
+# Questions
+We are trying to develop a model that can predict the number of EVs in certain areas utilizing zip code as of geographical blocks.
+
+What are the significant variables that would impact the EV adoption rate in areas? Education? Income? Number of Charging stations?
+
+Can we find areas where they have the capability of adapting to EVs but is acting slow or not adapting to EVs? Why there is a slow rate of adaption?
+
+# Previous Works
+From the proposal, we tried to find the correlation divided by counties. However, we notice that 39 counties are not enough to show statistically significant results.
+
+We plotted the relationship between EV per capita and median household income, but now we notice it is incorrect to compare relative variable with absolute variable, so we updated them, too.
+
+We were unclear about questions to explore during the proposal state, we were just playing with data and models. Now we have defined clear questions and work towards the possible solutions. 
+
+# Summary of works in this checkpoint
+In this Checkpoint, we updated all the tables in the Postal Codebase and did the Data ETL (Extract, transform, Load) process again. Now we have many more data points than the previous version.
+
+We also incorporate the Charge Station data into our model and find some interesting results. We add new variables to the model and find optimistic relationships about it.
+
+We found that we need to match the relative data with relative data instead of exact data like the number of EVs and EVs per capita. 
+
+We tried both the model between relative data and relative data like EV per capita and charging stations per capita. We also tried the model between absolute data and absolute data like the Number of EVs and the Number of Charge stations. We find that it does not make sense if we do not normalize the data. More people means more EVs, which also means more Charge Stations. It belongs to omitted variable bias.
+
+For instance, one time we found one of our models works perfectly well, with over 80 percent accuracy where the number of EVs is strongly positively correlated with the education rate. We were so excited but later we noticed that it did not make sense. After comparing with other variables and fitting the model with other models we find it belongs to the omitted variable bias and requires normalization. After normalizing all the data, the result becomes reasonable. 
+
+Finally, we combined our linear regression models together and got nice results.
+
+# Y variables & X variables
+
+All Y and X variables are grouped by postal code. 
+
+Y variables are EVs per capita and the total number of EVs.
+
+X variables are charge stations per capita, the total number of charge stations, the median income of households, the number of people aged 25 with a bachelor's degree or higher, and the number of persons aged 25 with a bachelor's degree or higher Regional share.
+
+# Data ETL
+We first processed all of the our data and cleaned them, then merged all of the data we needed into one unified data frame.
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+# number of ev by postal code in WA state
+wa_ev_data_by_postal_code <- ev_data %>%
+  filter(State == "WA") %>%
+  group_by(`Postal_Code`) %>%
+  summarise(Number_of_EV = n())
+print(head(wa_ev_data_by_postal_code,15))
+```
+```{r}
+charge_station_prior_2024 <- charge_station %>%
+  group_by(`Postal_Code`) %>%
+  summarise(charge_station_prior_2024 = n())
+print(head(charge_station_prior_2024,15))
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+merged_data <- merge(wa_ev_data_by_postal_code, population_by_postal_code, all = TRUE) %>%
+  mutate(EV_per_Capita = Number_of_EV / Population) %>%
+  merge(income_by_postal_code, all = TRUE) %>%
+  merge(charge_station_prior_2024, all = TRUE) %>%
+  merge(education, all = TRUE) %>%
+  mutate(Education = Bachelor.or.higher / Population) 
+merged_data[is.na(merged_data)] <- 0
+
+merged_data <- merged_data %>%
+  mutate(Charge_Station_per_Capita = ifelse(!is.na(charge_station_prior_2024) & !is.na(Population), 
+                                            charge_station_prior_2024 / Population, 
+                                            NA))
+
+print(head(merged_data, 15))
+
+
+
+```
+# Model fitting and interpretation
+# Model 1 EV per capita vs Charge station per capita
+```{r}
+merged_data <- merged_data %>%
+  filter(Population > 0 & !is.na(Population))
+
+model1 <- lm(EV_per_Capita ~ Charge_Station_per_Capita, data = merged_data)
+summary(model1)
+
+library(ggplot2)
+
+ggplot(merged_data, aes(x = Charge_Station_per_Capita, y = EV_per_Capita)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Relationship between EV Per Capita and Charging Stations Per Capita",
+       x = "Charge Station per Capita",
+       y = "EV Per Capita") +
+  theme_minimal()
+
+ggplot(merged_data, aes(x = Charge_Station_per_Capita, y = EV_per_Capita)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Relationship between EV Per Capita and Charging Stations Per Capita",
+       x = "Charge Station per Capita",
+       y = "EV Per Capita") +
+  coord_cartesian(xlim = c(0, 0.005), ylim = c(0, 0.1)) +
+  theme_minimal()
+
+```
+The relationship between electric vehicles per capita (EV_per_Capita) and charging stations per capita (Charge_Station_per_Capita) is being explored. In both images, a linear model (lm) was used to fit a regression line on a scatter plot to predict how charging station density affects the number of EVs per capita.
+
+In both graphs, while the range of the X-axis (Charge_Station_per_Capita) is slightly different, I have tried to limit the range of the Y-axis (EV_per_Capita) to between 0 and 0.1.
+
+Here are 3 reasons to show the relationship between two variables is not strong. First, the distribution of data points is fairly spread out and does not closely follow the regression line. Second, the slope of the regression line shows the relationship between one unit of change on the x-axis (charging station density) and one unit of change on the y-axis (number of EVs per capita). A flatter slope indicates that the change is not significant. Third, a lower R-squared value indicates that the model does not capture the relationship between the data points well.
+
+# Model 2 Number of EV vs Charge station prior 2024
+
+```{r}
+merged_data <- merged_data %>%
+  filter(Population > 0 & !is.na(Population))
+
+model2 <- lm(Number_of_EV ~ charge_station_prior_2024, data = merged_data)
+summary(model2)
+
+library(ggplot2)
+
+ggplot(merged_data, aes(x = charge_station_prior_2024, y = Number_of_EV)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Relationship between Number of EV and Charging Stations",
+       x = "Number of Charging Stations (2024)",
+       y = "Number of EV") +
+  theme_minimal()
+
+ggplot(merged_data, aes(x = charge_station_prior_2024, y = Number_of_EV)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Relationship between Number of EV and Charging Stations",
+       x = "Number of Charging Stations (2024)",
+       y = "Number of EV") +
+  coord_cartesian(xlim = c(0, 50), ylim = c(0, 2000)) +
+  theme_minimal()
+
+```
+The relationship between the total number of EVs  (Number_of_ EV) and the number of charging stations (Number_of_Charge_Stations) is being explored. A linear model (lm) was used to fit a regression line on a scatter plot to predict how the number of charging stations affects the total number of EVs.
+
+Following model 1, the relationship between 2 variables is not strong. The data points are widely distributed on the graph, especially in areas with a low number of charging stations, suggesting that there may be strong variability between the number of charging stations and the number of electric vehicles. This distribution may imply that while an overall increase in the number of charging stations is associated with an increase in the number of EVs, other factors may have influenced the number of EVs as well, so we need to consider other factors.
+
+# Model 3 EV per capita vs median household income
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+merged_data$Median.income..dollars. <- as.numeric(merged_data$Median.income..dollars.)
+merged_data$EV_per_Capita <- as.numeric(merged_data$EV_per_Capita)
+
+model3 <- lm(EV_per_Capita ~ Median.income..dollars., data = merged_data)
+summary(model3)
+# Remove NA values
+merged_data <- na.omit(merged_data)
+
+# Plot the data
+ggplot(merged_data, aes(x = Median.income..dollars., y = EV_per_Capita)) +
+  geom_point(alpha = 0.5) +  
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +  
+  labs(
+    title = "Relationship Between EV per capita and median income",
+    x = "Income",
+    y = "EV per capita"
+  ) +
+  theme_minimal()
+```
+We are exploring the relationship between electric vehicles per capita (EV_per_Capita) and median household income (Income) in this model.
+
+In this model, a linear model (lm) was used to fit a regression line on a scatter plot to predict how median household income could positively relate to the EVs per capita. 
+We have tried to limit the range of the Y-axis (EV_per_Capita) to between 0 and 0.5 to have a better view of the plot. 
+
+There is a statistically significant relationship between EV_per_Capita and median household income. From the summary function, we notice the p-value is less than 0.05, and the R-squared value is 0.139, meaning that approximately 13.9% of the variability in EV_per_capita is explained by the median household income.
+
+# Model 4 EV per capita vs Education per capita
+
+```{r}
+model4 <- lm(EV_per_Capita ~ Education, data = merged_data)
+summary(model4)
+
+merged_data$Education <- as.numeric(merged_data$Education)
+merged_data$EV_per_Capita <- as.numeric(merged_data$EV_per_Capita)
+
+# Remove NA values
+merged_data <- na.omit(merged_data)
+
+# Plot the data
+ggplot(merged_data, aes(x = Education, y = EV_per_Capita)) +
+  geom_point(alpha = 0.5) +  # Add semi-transparent points
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + 
+  labs(
+    title = "Relationship Between EV per capita and Bachelor or Higher (%)",
+    x = "Bachelor or Higher (%)",
+    y = "EV per capita"
+  ) +
+  theme_minimal()
+
+```
+The relationship between electric vehicles per capita (EV_per_Capita) and the number of persons aged 25 with a bachelor's degree or higher Regional share(Education_per_Capita) is being explored. 
+
+The coefficient on education level is positive, meaning that the predicted amount of EV per capita increases as the level of education increases. The t  and p-values for this coefficient indicate that the relationship between education and EV per capita is statistically significant. The R² value of 0.1915 means that education level explains approximately 19.15% of the variance in the number of EVs per capita. In other words, another 80.85% of the variance is explained by other factors not included in the model or by random error.
+
+To summarize, these results suggest that there is a positive association between education level and the number of EVs per capita and that areas with higher levels of education seem to have more EVs per capita. However, this relationship only explains a small portion of the variation in the number of EVs per capita, suggesting that many other factors are influencing the number of EVs per capita.
+
+# Model 5 Number of EV vs Median household income
+```{r}
+model5 <- lm(Number_of_EV ~ Median.income..dollars., data = merged_data)
+summary(model5)
+
+ggplot(merged_data, aes(x = Median.income..dollars., y = Number_of_EV)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  labs(title = "Relationship between Number of EV and Median Income",
+       x = "Median Income (dollars)",
+       y = "Number of EV") +
+  theme_minimal()
+
+```
+We are exploring the relationship between the number of EV (Number_of_EV) and median household income (Income) in this model.
+
+In this model, a linear model (lm) was used to fit a regression line on a scatter plot to predict how median household income could positively relate to the number of EV. 
+
+There is a statistically significant relationship between the number of EV and median household income. From the summary function, we notice the p-value is less than 0.05, and the R-squared value is 0.3481, meaning that approximately 34.81% of the variability in number of EV is explained by the median household income.
+
+# Model 6 Number of EV vs Bachelor Degree or Higher
+```{r}
+model6 <- lm(Number_of_EV ~ Bachelor.or.higher, data = merged_data)
+summary(model6)
+
+ggplot(merged_data, aes(x = Bachelor.or.higher, y = Number_of_EV)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  labs(title = "Relationship between Number of EV and Bachelor Degree or Higher",
+       x = "Bachelor or Higher",
+       y = "Number of EV") +
+  theme_minimal()
+```
+Model 6 considered number of EVs vs the number of population who received a bachelor degree or higher above the age of 25, this approach is not valid due to omitted variable bias and despite a really good R-squared value this model should not be considered for future analysis.
+
+# Model 7 Number of EV vs Multiple variables 
+```{r}
+model7 <- lm(Number_of_EV ~ Bachelor.or.higher + Median.income..dollars. + charge_station_prior_2024, data = merged_data)
+summary(model7)
+
+residuals_df <- data.frame(
+  Fitted = fitted(model7),
+  Residuals = resid(model7)
+)
+
+ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs Fitted Values for Model 7",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme_minimal()
+```
+Model 7 combined education, income and charging station as three independent variables vs the dependent variable is the total number of EVs in each postal code. Despite yielding excellent R-squared, this approach ignored a really important factor just like in model 6 that different postal code areas have different populations and that will directly impact the number of EVs in that areas. This is a omitted variable bias that we encountered using this model and thus this model is invalid for our future consideration.
+
+# Model 8 EV per Capita vs Multiple variables
+```{r}
+model8 <- lm(EV_per_Capita ~ Education + Median.income..dollars. + Charge_Station_per_Capita, data = merged_data)
+summary(model8)
+
+residuals_df <- data.frame(
+  Fitted = fitted(model8),
+  Residuals = resid(model8)
+)
+
+
+ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs Fitted Values for Model 8",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme_minimal()
+```
+Model 8 combined all three independent variables we have tried to fit before and normalized all of them. This model yields a much better R-squared value of 0.2888 which explains much more variables compared to any of the models only considered an individual independent variable. The residual plot showed a relatively desired plot with a few outliers in the graph.
+
+# Future work
+
+Future development should focus on finding more variables to better explain the dependent variable and introduce other model types rather than linear. Utilizing Lasso regression to find desired variables to explain the dependent variable can also be an option to look into.
