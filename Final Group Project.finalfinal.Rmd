@@ -1,0 +1,419 @@
+---
+title: "Final Group Project"
+author: "Abdulaziz Aljuaid, Jialong Li, Jack Lyu, Yu Qin, Xun Yang"
+date: "2024-04-28"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(modelr)
+ev_data <- read_csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Electric_Vehicle_Population_Data.csv")
+demo_data <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/demo.csv")
+population_by_postal_code <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Pupulation by Postal Code.csv")
+income_by_postal_code <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Income by Postal Code.csv")
+charge_station <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Charge Station.csv")
+education <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/education by postal code.csv")
+population_density_by_postal_code <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Population density by postal code1.csv")
+urbanization <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/urban by zip code.csv")
+Vehicle_adoption <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Vehicle_Registration.csv")
+EV_2020 <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Vehicle_Registration_2020.csv")
+EV_2021 <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Vehicle_Registration_2021.csv")
+EV_2022 <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Vehicle_Registration_2022.csv")
+EV_2023 <- read.csv("C:/Study/CMU/19603_Data_Science/Final_Project/19603_Final_Project/Proposal copy/Vehicle_Registration_2023.csv")
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+# number of ev by postal code in WA state
+wa_ev_data_by_postal_code <- ev_data %>%
+  filter(State == "WA") %>%
+  group_by(`Postal_Code`) %>%
+  summarise(Number_of_EV = n())
+print(head(wa_ev_data_by_postal_code,15))
+```
+```{r}
+charge_station_prior_2024 <- charge_station %>%
+  group_by(`Postal_Code`) %>%
+  summarise(charge_station_prior_2024 = n())
+print(head(charge_station_prior_2024,15))
+```
+
+# Urbanization degree
+```{r}
+urbanization <- urbanization %>%
+  mutate(UrbanDegree = ifelse(Urban == 0, 0, Urban / Total))
+print(head(urbanization, 15))
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+
+# number of vehicle by postal code in WA state
+total_vehicle <- Vehicle_adoption %>%
+  group_by(`Postal_Code`) %>%
+  summarise(Number_of_Vehicle = n())
+
+merged_data1 <- merge(wa_ev_data_by_postal_code, total_vehicle, by = "Postal_Code", all.x = TRUE)
+
+merged_data1 <- merged_data1 %>%
+  mutate(merged_data1, EV_adoption = ifelse(Number_of_Vehicle > 0, Number_of_EV / Number_of_Vehicle, NA))%>%
+  select(-Number_of_EV)%>%
+  select(-Number_of_Vehicle)
+print(head(merged_data1, 15))
+
+
+merged_data <- merge(wa_ev_data_by_postal_code, population_by_postal_code, all = TRUE) %>%
+  mutate(EV_per_Capita = Number_of_EV / Population) %>%
+  merge(income_by_postal_code, all = TRUE) %>%
+  merge(charge_station_prior_2024, all = TRUE) %>%
+  merge(education, all = TRUE) %>%
+  merge(population_density_by_postal_code, all = TRUE)%>%
+  merge(urbanization, all = TRUE) %>%
+  merge(merged_data1, all = TRUE) %>%
+  mutate(Education = Bachelor.or.higher / Population)
+merged_data[is.na(merged_data)] <- 0
+
+merged_data <- merged_data %>%
+  mutate(Charge_Station_per_Capita = ifelse(!is.na(charge_station_prior_2024) & !is.na(Population), 
+                                            charge_station_prior_2024 / Population, 
+                                            NA))
+print(head(merged_data,15))
+```
+
+# Model fitting and interpretation
+# Model 1 EV Adoption Rate vs Log of Charge station per capita
+```{r}
+merged_data <- merged_data %>%
+  filter(Population > 0 & !is.na(Population))
+
+merged_data$Log_Charge_Station_per_Capita <- ifelse(merged_data$Charge_Station_per_Capita > 0, log(merged_data$Charge_Station_per_Capita), NA)
+
+model1 <- lm(EV_adoption ~ Log_Charge_Station_per_Capita, data = merged_data)
+summary(model1)
+
+
+
+library(ggplot2)
+
+ggplot(merged_data, aes(x = Log_Charge_Station_per_Capita, y = EV_adoption)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Relationship between EV adoption rate and Log of Charging Stations Per Capita",
+       x = "Log of Charge Station per Capita",
+       y = "EV Adoption Rate") +
+  theme_minimal()
+
+ggplot(merged_data, aes(x = Log_Charge_Station_per_Capita, y = EV_adoption)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Relationship between EV adoption rate and Log of Charging Stations Per Capita",
+       x = "Log of Charge Station per Capita",
+       y = "EV Adoption Rate") +
+  coord_cartesian(xlim = c(0, 0.005), ylim = c(0, 0.1)) +
+  theme_minimal()
+
+```
+
+
+# Model 2 EV Adoption Rate vs median household income
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+
+merged_data$Median.income..dollars. <- gsub("[^0-9.]", "", merged_data$Median.income..dollars.) 
+merged_data$Median.income..dollars. <- as.numeric(merged_data$Median.income..dollars.) 
+merged_data$Median.income..dollars.[merged_data$Median.income..dollars. == 0] <- NA
+merged_data$Log_Median_Income <- ifelse(merged_data$Median.income..dollars. > 0, log(merged_data$Median.income..dollars.), NA)
+merged_data <- na.omit(merged_data)
+
+ggplot(merged_data, aes(x = Median.income..dollars.)) +
+  geom_histogram(aes(y = ..density..), binwidth = .05, colour = "black", fill = "white") +
+  geom_density(alpha = .2, fill = "#FF6666") +
+  labs(title = "Distribution of Median income", x = "Median income Level", y = "Density") +
+  theme_minimal()
+
+ggplot(merged_data, aes(x = Log_Median_Income)) +
+  geom_histogram(aes(y = ..density..), binwidth = .05, colour = "black", fill = "white") +
+  geom_density(alpha = .2, fill = "#FF6666") +
+  labs(title = "Distribution of Log Median Income Level", x = "Log Median Income", y = "Density") +
+  theme_minimal()
+
+model3 <- lm(EV_adoption ~ Log_Median_Income, data = merged_data)
+summary(model3)
+
+ggplot(merged_data, aes(x = Log_Median_Income, y = EV_adoption)) +
+  geom_point(alpha = 0.5) +  # semi-transparent points to see overlap and density
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +  # add a linear regression line without standard error
+  labs(
+    title = "Relationship Between EV adoption rate and Log of Median Income",
+    x = "Log of Median Income",
+    y = "EV Adoption Rate"
+  ) +
+  theme_minimal()
+
+```
+
+# Model 3 EV Adoption Rate vs Education Rate with Bachelor or Higher degrees(%)
+
+```{r}
+model3 <- lm(EV_adoption ~ Education, data = merged_data)
+summary(model3)
+
+merged_data$Education <- as.numeric(merged_data$Education)
+merged_data$EV_adoption <- as.numeric(merged_data$EV_adoption)
+
+# Remove NA values
+merged_data <- na.omit(merged_data)
+
+# Plot the data
+ggplot(merged_data, aes(x = Education, y = EV_adoption)) +
+  geom_point(alpha = 0.5) +  # Add semi-transparent points
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + 
+  labs(
+    title = "Relationship Between EV adoption rate and Education Rate",
+    x = "Education Rate with Bachelor or Higher degrees(%)",
+    y = "EV Adoption Rate"
+  ) +
+  theme_minimal()
+
+```
+
+
+```{r}
+library(ggplot2)
+
+merged_data$Education <- as.numeric(gsub("[^0-9.]", "", merged_data$Education)) 
+merged_data$Education[merged_data$Education == 0] <- NA
+merged_data$Log_Education <- ifelse(merged_data$Education > 0, log(merged_data$Education), NA)
+merged_data <- na.omit(merged_data)
+
+merged_data$Charge_Station_per_Capita[merged_data$Charge_Station_per_Capita <= 0] <- NA
+merged_data$Log_Charge_Station_per_Capita <- ifelse(merged_data$Charge_Station_per_Capita > 0, log(merged_data$Charge_Station_per_Capita), NA)
+merged_data <- na.omit(merged_data)
+
+merged_data$population_density <- as.numeric(gsub("[^0-9.]", "", merged_data$population_density)) 
+merged_data$population_density[merged_data$population_density == 0] <- NA
+merged_data$Log_population_density <- ifelse(merged_data$population_density > 0, log(merged_data$population_density), NA)
+merged_data <- na.omit(merged_data)
+```
+
+
+# Model 4 EV Adoption Rate vs Log of Population Density
+```{r}
+
+model4 <- lm(EV_adoption ~ log(population_density), data = merged_data)
+summary(model4)
+
+merged_data$Log_population_density <- log(as.numeric(merged_data$population_density))
+merged_data$EV_adoption <- as.numeric(merged_data$EV_adoption)
+
+
+
+# Remove NA values
+merged_data <- na.omit(merged_data)
+
+# Plot the data
+ggplot(merged_data, aes(x = Log_population_density, y = EV_adoption)) +
+  geom_point(alpha = 0.5) +  # Add semi-transparent points
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + 
+  labs(
+    title = "Relationship Between EV adoption rate and Population Density",
+    x = "Population Density",
+    y = "EV Adoption Rate"
+  ) +
+  theme_minimal()
+
+```
+
+
+# Model 5 EV Adoption Rate vs UrbanDegree
+```{r}
+model5 <- lm(EV_adoption ~ UrbanDegree, data = merged_data)
+summary(model5)
+ggplot(merged_data, aes(x = UrbanDegree, y = EV_adoption)) +
+  geom_point(alpha = 0.5) +  # Add semi-transparent points
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + 
+  labs(
+    title = "Relationship Between EV adoption rate and Urbanization Degree",
+    x = "Urbanization Degree",
+    y = "EV Adoption Rate"
+  ) +
+  theme_minimal()
+
+```
+
+# Model 6 EV Adoption Rate vs Multiple variables
+```{r}
+model6 <- lm(EV_adoption ~ Education + Log_Median_Income + Charge_Station_per_Capita + population_density + UrbanDegree ,data = merged_data)
+summary(model6)
+
+residuals_df <- data.frame(
+  Fitted = fitted(model6),
+  Residuals = resid(model6)
+)
+
+ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs Fitted Values for Model 6",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+# Cross Validation on model 6
+```{r}
+library(caret)
+set.seed(123)  # for reproducibility
+train_control <- trainControl(
+  method = "cv",   # cross-validation
+  number = 10      # number of folds
+)
+
+cv_model <- train(
+  EV_adoption ~ Education + Log_Median_Income + Charge_Station_per_Capita + population_density + UrbanDegree,
+  data = merged_data,
+  method = "lm",           # linear model
+  trControl = train_control
+)
+print(cv_model)
+residuals_df <- data.frame(
+  Fitted = fitted(cv_model$finalModel),
+  Residuals = resid(cv_model$finalModel)
+)
+
+ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs Fitted Values for Cross-Validated Model",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+# DID model to determine the effect of EV tax refund Form 8936 by IRS
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+# number of EV by postal code in WA state at 2020
+ev2020 <- EV_2020 %>%
+  group_by(`Postal_Code`) %>%
+  summarise(EV_count = n())
+
+# number of EV by postal code in WA state at 2021
+ev2021 <- EV_2021 %>%
+  group_by(`Postal_Code`) %>%
+  summarise(EV_count = n())
+
+# number of EV by postal code in WA state at 2022
+ev2022 <- EV_2022 %>%
+  group_by(`Postal_Code`) %>%
+  summarise(EV_count = n())
+
+# number of EV by postal code in WA state at 2023
+ev2023 <- EV_2023 %>%
+  group_by(`Postal_Code`) %>%
+  summarise(EV_count = n())
+
+ev2020$year <- 2020
+ev2021$year <- 2021
+ev2022$year <- 2022
+ev2023$year <- 2023
+
+ev20_24 <- bind_rows(ev2020, ev2021, ev2022, ev2023)
+
+ev20_24 <- ev20_24 %>%
+  group_by(Postal_Code, year) %>%
+  summarise(EV_count = n(), .groups = 'drop')
+
+ev20_24 <- ev20_24 %>%
+  mutate(treatment = ifelse(year >= 2022, 1, 0))
+
+did_model <- lm(EV_count ~ treatment * year + Postal_Code, data = ev20_24)
+summary(did_model)
+```
+
+# Lasso model
+```{r}
+
+library(glmnet)
+x <- model.matrix(EV_adoption ~ Education + Log_Median_Income + Charge_Station_per_Capita + population_density + UrbanDegree, data = merged_data)[,-1]  
+y <- merged_data$EV_adoption
+
+lasso_model <- glmnet(x, y, alpha = 1)  # Alpha = 1 for Lasso; mix of Lasso and Ridge when 0 < alpha < 1
+
+
+plot(lasso_model, xvar = "lambda", label = TRUE)
+
+
+cv_model <- cv.glmnet(x, y, alpha = 1)
+plot(cv_model)
+best_lambda <- cv_model$lambda.min
+
+final_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
+coef(final_model)
+
+```
+
+# Try SVM on Model 6
+```{r}
+library(e1071)
+data_scaled <- scale(merged_data[, c("Education", "Log_Median_Income", "Charge_Station_per_Capita", "population_density", "UrbanDegree")])
+response <- merged_data$EV_adoption
+
+# Combine scaled data back into a data frame
+data_scaled <- as.data.frame(data_scaled)
+data_scaled$EV_adoption <- response
+
+svm_model <- svm(EV_adoption ~ ., data = data_scaled, type = "eps-regression")
+
+# Summary of the SVM model
+summary(svm_model)
+
+# Predictions
+predictions <- predict(svm_model, data_scaled)
+
+# Calculate residuals
+residuals_svm <- data_scaled$EV_adoption - predictions
+
+# Data frame for plotting
+residuals_df_svm <- data.frame(
+  Fitted = predictions,
+  Residuals = residuals_svm
+)
+
+# Plot residuals
+ggplot(residuals_df_svm, aes(x = Fitted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs Fitted Values for SVM Model",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme_minimal()
+
+library(caret)
+tune_grid <- expand.grid(sigma = c(0.001, 0.01), C = c(1, 10))
+train_control <- trainControl(method = "cv", number = 10)
+
+# Tune the model
+tuned_model <- train(EV_adoption ~ ., data = data_scaled, method = "svmRadial",
+                     trControl = train_control, tuneGrid = tune_grid)
+print(tuned_model)
+
+```
+# Final optimized Model 7
+```{r}
+model7 <- lm(EV_adoption ~ Education + Log_Median_Income + Log_Charge_Station_per_Capita + Log_population_density + UrbanDegree ,data = merged_data)
+summary(model7)
+
+residuals_df <- data.frame(
+  Fitted = fitted(model7),
+  Residuals = resid(model7)
+)
+
+ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs Fitted Values for Model 7",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme_minimal()
+```
